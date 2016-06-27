@@ -10,7 +10,9 @@ CDuiComboBox::CDuiComboBox(HWND hWnd, CDuiObject* pDuiObject)
 	m_strImageHeadBitmap = _T("");
 	m_strImageDeleteBitmap = _T("");
 	m_strXmlFile = _T("");
+	m_strImageScroll = _T("");
 	m_pPopupList = NULL;
+	m_nListHeight = 0;
 	m_strComboValue = _T("");
 	m_clrText = Color(255, 0, 20, 35);
 	m_clrDesc = Color(255, 255, 255, 255);
@@ -55,7 +57,7 @@ BOOL CDuiComboBox::Load(DuiXmlNode pXmlElem, BOOL bLoadSubControl)
 
 			if(strImage.Find(_T(".")) == -1)	// 加载图片资源
 			{
-				nResourceID = _wtoi(strImage);
+				nResourceID = _ttoi(strImage);
 				strImage = _T("");
 			}
 		}
@@ -140,7 +142,7 @@ int CDuiComboBox::AddItem(CString strName, CString strDesc, CString strValue, in
 			}*/
 		}else	// 加载图片资源
 		{
-			nResourceID = _wtoi(strImage);
+			nResourceID = _ttoi(strImage);
 			strImage = _T("");
 		}
 	}
@@ -215,7 +217,7 @@ HRESULT CDuiComboBox::OnAttributeHeadImage(const CString& strValue, BOOL bLoadin
 		}
 	}else	// 加载图片资源
 	{
-		UINT nResourceID = _wtoi(strSkin);
+		UINT nResourceID = _ttoi(strSkin);
 		m_nResourceIDHeadBitmap = nResourceID;
 	}
 
@@ -247,7 +249,7 @@ HRESULT CDuiComboBox::OnAttributeDeleteImage(const CString& strValue, BOOL bLoad
 		}
 	}else	// 加载图片资源
 	{
-		UINT nResourceID = _wtoi(strSkin);
+		UINT nResourceID = _ttoi(strSkin);
 		m_nResourceIDDeleteBitmap = nResourceID;
 	}
 
@@ -257,7 +259,7 @@ HRESULT CDuiComboBox::OnAttributeDeleteImage(const CString& strValue, BOOL bLoad
 // 消息处理
 LRESULT CDuiComboBox::OnMessage(UINT uID, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
-	if((CONTROL_BUTTON == wParam) && (MSG_BUTTON_DOWN == lParam) && (m_pPopupList == NULL))	// 鼠标点击了编辑框的下拉按钮
+	if((MSG_CONTROL_BUTTON == uMsg) && (CONTROL_BUTTON == wParam) && (MSG_BUTTON_DOWN == lParam) && (m_pPopupList == NULL))	// 鼠标点击了编辑框的下拉按钮
 	{
 		CRect rcClient = GetRect();
 		rcClient.top = rcClient.bottom;
@@ -266,6 +268,8 @@ LRESULT CDuiComboBox::OnMessage(UINT uID, UINT uMsg, WPARAM wParam, LPARAM lPara
 		m_pPopupList = pPopupList;
 		pPopupList->SetParent(this);	// 将PopupList的父控件指向combobox
 		pPopupList->SetWidth(rcClient.Width());
+		pPopupList->SetHeight(m_nListHeight);
+		pPopupList->OnAttributeImageScrollV(m_strImageScroll, FALSE);
 		if(m_nResourceIDHeadBitmap != 0)
 		{
 			pPopupList->SetHeadBitmap(m_nResourceIDHeadBitmap);
@@ -317,7 +321,7 @@ LRESULT CDuiComboBox::OnMessage(UINT uID, UINT uMsg, WPARAM wParam, LPARAM lPara
 		// 显示下拉列表窗口
 		pPopupList->ShowWindow(SW_SHOW);
 	}else
-	if((SELECT_ITEM == wParam) && m_pPopupList)	// 下拉框选择
+	if((MSG_CONTROL_SELECT == uMsg) && m_pPopupList)	// 下拉框选择
 	{
 		CString strName;
 		m_pPopupList->GetItemName(lParam, strName);
@@ -336,7 +340,7 @@ LRESULT CDuiComboBox::OnMessage(UINT uID, UINT uMsg, WPARAM wParam, LPARAM lPara
 		}
 		m_pPopupList = NULL;
 	}else
-	if((DELETE_ITEM == wParam) && m_pPopupList)	// 删除下拉框列表项
+	if((MSG_CONTROL_DELETE == uMsg) && m_pPopupList)	// 删除下拉框列表项
 	{
 		// 如果设置了删除按钮图片，才可以进行删除
 		if(!m_strImageDeleteBitmap.IsEmpty() || (m_nResourceIDDeleteBitmap != 0))
@@ -355,7 +359,7 @@ BOOL CDuiComboBox::OnControlKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 	if(m_bDown && (nChar == VK_DOWN) && (nFlags == 0) && IsFocusControl())
 	{
 		// 模拟鼠标点击
-		SendMessage(m_uID, CONTROL_BUTTON, MSG_BUTTON_DOWN);
+		SendMessage(MSG_CONTROL_BUTTON, CONTROL_BUTTON, MSG_BUTTON_DOWN);
 		return true;
 	}
 

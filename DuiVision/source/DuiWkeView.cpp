@@ -2,8 +2,6 @@
 #include "DuiWkeView.h"
 #include <Imm.h>
 
-#ifdef USE_WKE_CONTROL
-
 #pragma comment(lib, "imm32.lib")		// 自动链接imm库
 #pragma message("Automatically linking with imm32.lib")
 
@@ -26,8 +24,8 @@ CDuiWkeView::CDuiWkeView(HWND hWnd, CDuiObject* pDuiObject)
 	m_bDelayCreate = false;
 	m_bTransparent = false;
 	m_pWebView = NULL;
-	m_strUrl = L"";
-	m_strHtml = L"";
+	m_strUrl = _T("");
+	m_strHtml = _T("");
 
 	CDuiWkeView::WkeInit();
 	g_duiWkeViews.AddTail(this);
@@ -152,10 +150,7 @@ HRESULT CDuiWkeView::OnAttributeUrl(const CString& strValue, BOOL bLoading)
 	if (strValue.IsEmpty()) return E_FAIL;
 
 	m_strUrl = strValue;
-	if(m_pWebView != NULL)
-	{
-		m_pWebView->loadURL(m_strUrl);
-	}
+	Navigate(m_strUrl);
 
 	return bLoading?S_FALSE:S_OK;
 }
@@ -179,7 +174,7 @@ void CDuiWkeView::SetDelayCreate(bool bDelayCreate)
 	m_bDelayCreate = bDelayCreate;
 }
 
-const LPCWSTR wkeWebViewClassName = L"class::wkeWebView";	// wke窗口类名
+const LPCTSTR wkeWebViewClassName = _T("class::wkeWebView");	// wke窗口类名
 
 // 注册窗口类
 bool CDuiWkeView::RegisterWindowClass()
@@ -220,7 +215,7 @@ bool CDuiWkeView::CreateControl()
 	m_pWebView->setTransparent(m_bTransparent);
 	m_pWebView->setClientHandler(&m_wkeHander);
 	m_pWebView->setBufHandler(this);
-	m_pWebView->loadURL(m_strUrl);
+	Navigate(m_strUrl);
 
 	// 注册窗口类
 	RegisterWindowClass();
@@ -323,8 +318,8 @@ LRESULT CDuiWkeView::OnWmKeyDown(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
 		bShiftState = true;
 	HKL hKL = GetKeyboardLayout(0);
 	int i = LOWORD(hKL);
-	WCHAR buffer[255];   
-	memset(buffer,0,255 * sizeof(WCHAR));  
+	TCHAR buffer[255];   
+	memset(buffer,0,255 * sizeof(TCHAR));  
 	if( (i == 0x0804) && (ImmIsIME(hKL)) )
 	{
 		ImmGetDescription(hKL,buffer,255);
@@ -719,8 +714,15 @@ void CDuiWkeView::onURLChanged(const struct _wkeClientHandler* clientHandler, co
 	CDuiWkeView* pDuiWkeView = CDuiWkeView::GetWkeViewByClientHandler(clientHandler);
 	if(pDuiWkeView)
 	{
+#ifdef _UNICODE
 		pDuiWkeView->setURL(wkeToStringW(URL));
 		pDuiWkeView->SendMessage(MSG_CONTROL_EVENT, (WPARAM)WKE_EVENT_URLCHANGED, (LPARAM)wkeToStringW(URL));
+#else
+		const wchar_t *pWchar=wkeToStringW(URL);
+		CStringA strA=CEncodingUtil::UnicodeToAnsi(pWchar);
+		pDuiWkeView->setURL(strA);
+		pDuiWkeView->SendMessage(MSG_CONTROL_EVENT, (WPARAM)WKE_EVENT_URLCHANGED, (LPARAM)(LPCTSTR)(strA));
+#endif
 	}
 }
 
@@ -740,10 +742,15 @@ CString CDuiWkeView::getTitle()
 {
 	if(m_pWebView)
 	{
+#ifdef _UNICODE
 		return m_pWebView->titleW();
+#else
+		const wchar_t *pWstr=m_pWebView->titleW();
+		return CEncodingUtil::UnicodeToAnsi(pWstr);
+#endif
 	}
 
-	return L"";
+	return _T("");
 }
 
 // 获取网页URL
@@ -763,7 +770,19 @@ void CDuiWkeView::Navigate(CString strUrl)
 {
 	if(m_pWebView)
 	{
-		m_pWebView->loadURL(strUrl);
+		if(strUrl.Find(_T("file://")) == 0)
+		{
+			CString strFile = strUrl;
+			strFile.Delete(0, 7);
+			if(strFile.Find(_T(":")) == -1)
+			{
+				strFile = DuiSystem::GetSkinPath() + strFile;
+			}
+			m_pWebView->loadFile(strFile);
+		}else
+		{
+			m_pWebView->loadURL(strUrl);
+		}
 		m_render.render(m_pWebView);
 	}
 }
@@ -837,5 +856,3 @@ bool CDuiWkeView::goForward()
 	}
 	return false;
 }
-
-#endif // USE_WKE_CONTROL

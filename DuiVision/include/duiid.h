@@ -74,17 +74,20 @@
 #define					MSG_MOUSE_RUP						12						// 鼠标右键放开事件
 #define					MSG_KEY_DOWN						13						// 键盘按下事件
 #define					MSG_CONTROL_EVENT					14						// 控件的自定义事件
+#define					MSG_MOUSE_RDBLCLK					15						// 鼠标右键双击
+#define					MSG_CONTROL_SELECT					16						// 控件内的选择事件
+#define					MSG_CONTROL_DELETE					17						// 控件内的删除事件
 
 
 // 进程间消息内容的结构定义
 struct DUI_INTERPROCESS_MSG
 {
-	WCHAR	wAppName[128];		// 应用名
+	TCHAR	wAppName[128];		// 应用名
 	UINT	uControlID;			// 控件ID
-	WCHAR	wControlName[64];	// 控件名字
+	TCHAR	wControlName[64];	// 控件名字
 	UINT	uMsg;				// 消息
 	WPARAM	wParam;				// 参数1
 	LPARAM	lParam;				// 参数2
-	WCHAR	wInfo[10240];		// 信息字符串
+	TCHAR	wInfo[10240];		// 信息字符串
 	UINT	uDataLen;			// 扩展部分长度
 };

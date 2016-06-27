@@ -42,6 +42,8 @@ CDlgBase::CDlgBase(UINT nIDTemplate, CWnd* pParent /*=NULL*/)
 
 	m_bIsLButtonDown = FALSE;
 	m_bIsLButtonDblClk = FALSE;
+	m_bIsRButtonDown = FALSE;
+	m_bIsRButtonDblClk = FALSE;
 	m_pOldMemBK = NULL;
 	m_pControl = NULL;
 	m_pFocusControl = NULL;
@@ -87,7 +89,7 @@ CDlgBase::CDlgBase(UINT nIDTemplate, CWnd* pParent /*=NULL*/)
 			DuiSystem::Instance()->LoadIconFile(strTrayIcon, m_hIcon);
 		}else	// 加载图标资源
 		{
-			UINT nResourceID = _wtoi(strTrayIcon);
+			UINT nResourceID = _ttoi(strTrayIcon);
 			LoadIconFromIDResource(nResourceID, m_hIcon);
 		}
 	}
@@ -186,6 +188,9 @@ BEGIN_MESSAGE_MAP(CDlgBase, CDialog)
 	ON_WM_LBUTTONDOWN()
 	ON_WM_LBUTTONUP()
 	ON_WM_LBUTTONDBLCLK()
+	ON_WM_RBUTTONDOWN()
+	ON_WM_RBUTTONUP()
+	ON_WM_RBUTTONDBLCLK()
 	ON_WM_DROPFILES()
 	ON_WM_DESTROY()
 	ON_MESSAGE(WM_USER_CLOSEWND, OnUserCloseWindow)
@@ -289,7 +294,7 @@ BOOL CDlgBase::OnInitDialog()
 	tmpFont.GetLogFont(&font);
 
 	CWindowDC dc(this);
-	wcscpy(font.lfFaceName,DuiSystem::GetDefaultFont());
+	_tcscpy(font.lfFaceName,DuiSystem::GetDefaultFont());
 	font.lfHeight = -10 * GetDeviceCaps(dc.m_hDC, LOGPIXELSY) / 72;
 	font.lfWeight = 600;
 
@@ -329,7 +334,9 @@ BOOL CDlgBase::OnInitDialog()
 	if(!m_bAppWin)
 	{
 		// 不是主窗口(在任务栏不会显示出此窗口),则设置TOOLWINDOWS属性
-		::SetWindowLong(m_hWnd, GWL_EXSTYLE, GetWindowLong(m_hWnd,GWL_EXSTYLE) | WS_EX_TOOLWINDOW);
+		//::SetWindowLong(m_hWnd, GWL_EXSTYLE, GetWindowLong(m_hWnd,GWL_EXSTYLE) | WS_EX_TOOLWINDOW);
+		// 解决NotifyMsg窗口在任务栏显示的问题,需要去掉APPWINDOW属性,再增加TOOLWINDOW属性
+		ModifyStyleEx(WS_EX_APPWINDOW, WS_EX_TOOLWINDOW);
 	}
 
 	// 设置窗口背景透明属性
@@ -480,14 +487,14 @@ void CDlgBase::InitDialogValue()
 		{
 			if(pCtrlValue->strType == _T("width"))
 			{
-				m_MinSize.cx = _wtoi(pCtrlValue->strValue);
+				m_MinSize.cx = _ttoi(pCtrlValue->strValue);
 				// 更新窗口大小
 				SetMinSize(m_MinSize.cx, m_MinSize.cy);
 				SetRect(CRect(0, 0, m_MinSize.cx, m_MinSize.cy));
 			}else
 			if(pCtrlValue->strType == _T("height"))
 			{
-				m_MinSize.cy = _wtoi(pCtrlValue->strValue);
+				m_MinSize.cy = _ttoi(pCtrlValue->strValue);
 				// 更新窗口大小
 				SetMinSize(m_MinSize.cx, m_MinSize.cy);
 				SetRect(CRect(0, 0, m_MinSize.cx, m_MinSize.cy));
@@ -519,11 +526,11 @@ void CDlgBase::InitControlValue()
 		{
 			if(pCtrlValue->strType == _T("visible"))
 			{
-				pControl->SetVisible(_wtoi(pCtrlValue->strValue));
+				pControl->SetVisible(_ttoi(pCtrlValue->strValue));
 			}else
 			if(pCtrlValue->strType == _T("disable"))
 			{
-				pControl->SetDisable(_wtoi(pCtrlValue->strValue));
+				pControl->SetDisable(_ttoi(pCtrlValue->strValue));
 			}else
 			if(pCtrlValue->strType == _T("title"))
 			{
@@ -906,7 +913,7 @@ HRESULT CDlgBase::OnAttributeResize(const CString& strValue, BOOL bLoading)
     if (strValue.IsEmpty()) return E_FAIL;
 
 	// 获取resize属性，并重新设置一下窗口风格
-	m_bChangeSize = _wtoi(strValue);
+	m_bChangeSize = _ttoi(strValue);
 
 	// 设置窗口风格
 	DWORD dwStyle = ::GetWindowLong(m_hWnd, GWL_STYLE)
@@ -950,7 +957,7 @@ void CDlgBase::InitWindowBkSkin()
 			nType = BKTYPE_IMAGE_FILE;
 		}else	// 加载图片资源
 		{
-			nIDResource = _wtoi(strImgFile);
+			nIDResource = _ttoi(strImgFile);
 			nType = BKTYPE_IMAGE_RESOURCE;
 		}
 	}else
@@ -1855,6 +1862,7 @@ LRESULT CDlgBase::OnSystemTrayIcon(WPARAM wParam, LPARAM lParam)
 				SetForegroundWindow();
 				ShowWindow(SW_NORMAL);
 				ShowWindow(SW_SHOW);
+				UpdateWindow();
 				BringWindowToTop();
 			}
 		}
@@ -2402,6 +2410,91 @@ void CDlgBase::OnLButtonDblClk(UINT nFlags, CPoint point)
 	CDialog::OnLButtonDblClk(nFlags, point);
 }
 
+// 鼠标右键按下
+void CDlgBase::OnRButtonDown(UINT nFlags, CPoint point)
+{
+	BOOL bIsSelect = false;
+	m_bIsRButtonDblClk = FALSE;
+
+	// 如果鼠标点击的不是原来的焦点控件,则清除原来的焦点控件
+	if((m_pFocusControl != m_pControl) && (m_pFocusControl != NULL))
+	{
+		SetFocusControl(NULL);
+	}
+
+	BOOL bHandled = FALSE;
+	if (m_pControl)
+	{
+		if(m_pControl->GetVisible() && m_pControl->GetRresponse())
+		{
+			if (m_pControl->PtInRect(point) && m_pControl->OnCheckMouseResponse(nFlags, point))
+			{
+				bIsSelect = TRUE;
+				m_bIsRButtonDown = TRUE;
+
+				m_pFocusControl = m_pControl;
+				bHandled = m_pControl->OnRButtonDown(nFlags, point);						
+			}
+		}
+	}
+
+	CDialog::OnRButtonDown(nFlags, point);
+}
+
+// 鼠标右键放开
+void CDlgBase::OnRButtonUp(UINT nFlags, CPoint point)
+{
+	m_bIsRButtonDown = FALSE;
+
+	if (m_pControl)
+	{
+		if(m_pControl->GetVisible() && m_pControl->GetRresponse())
+		{
+			CRect rc = m_pControl->GetRect();
+			m_pControl->OnRButtonUp(nFlags, point);				
+
+			if (!rc.PtInRect(point))
+			{
+				m_pControl = NULL;
+			}
+		}
+		else
+		{
+			m_pControl = NULL;
+		}	
+	}
+
+	m_bIsRButtonDblClk = FALSE;
+
+	CDialog::OnRButtonUp(nFlags, point);
+}
+
+// 鼠标右键双击
+void CDlgBase::OnRButtonDblClk(UINT nFlags, CPoint point)
+{
+	m_bIsRButtonDblClk = TRUE;
+
+	if(m_pControl)
+	{
+		if(m_pControl->GetVisible() && m_pControl->GetRresponse())
+		{
+			CRect rc = m_pControl->GetRect();
+			m_pControl->OnRButtonDblClk(nFlags, point);				
+
+			if (!rc.PtInRect(point))
+			{
+				m_pControl = NULL;
+			}
+		}
+		else
+		{
+			m_pControl = NULL;
+		}
+	}
+
+	CDialog::OnRButtonDblClk(nFlags, point);
+}
+
 // 键盘事件处理(移到PreTranslateMessage中实现子控件的键盘事件调用,因为对话框的OnKeyDown函数有局限性,不能捕获到ALT等组合键)
 void CDlgBase::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 {
@@ -2508,7 +2601,7 @@ BOOL CDlgBase::PreTranslateMessage(MSG* pMsg)
 	return CDialog::PreTranslateMessage(pMsg);
 }
 
-// 定时器消息
+// 定时器消息(重载CTimer类的函数)
 void CDlgBase::OnTimer(UINT uTimerID)
 {
 	if(m_uTimerAnimation == uTimerID)	// 动画定时器
@@ -2545,7 +2638,7 @@ void CDlgBase::OnTimer(UINT uTimerID)
 	}
 }
 
-// 定时器消息(带定时器名字的定时函数)
+// 定时器消息(带定时器名字的定时函数,重载CTimer类的函数)
 void CDlgBase::OnTimer(UINT uTimerID, CString strTimerName)
 {
 	// 应用创建的定时器都调用事件处理对象的定时处理函数

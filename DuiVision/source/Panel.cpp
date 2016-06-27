@@ -7,6 +7,7 @@
 CDuiPanel::CDuiPanel(HWND hWnd, CDuiObject* pDuiObject)
 			: CControlBaseFont(hWnd, pDuiObject)
 {
+	m_ulRefCount = 0;
 	m_bEnableScroll = TRUE;
 	m_nScrollWidth = 8;
 
@@ -33,6 +34,7 @@ CDuiPanel::CDuiPanel(HWND hWnd, CDuiObject* pDuiObject)
 	m_hPluginHandle = NULL;
 	m_strPluginFile = _T("");
 	m_pDuiPluginObject = NULL;
+	m_pIDuiHostWnd = NULL;
 
 	m_bDblClk = true;
 
@@ -109,7 +111,7 @@ BOOL CDuiPanel::LoadXmlFile(CString strFileName)
 
 	if(!DuiSystem::Instance()->LoadXmlFile(xmlDoc, strFileName))
 	{
-		DuiSystem::LogEvent(LOG_LEVEL_ERROR, L"CDuiPanel::LoadXmlFile %s failed", strFileName);
+		DuiSystem::LogEvent(LOG_LEVEL_ERROR, _T("CDuiPanel::LoadXmlFile %s failed"), strFileName);
 		return FALSE;
 	}
 
@@ -117,14 +119,14 @@ BOOL CDuiPanel::LoadXmlFile(CString strFileName)
 	pDivElem = xmlDoc.child(_T("div"));
 	if(pDivElem == NULL)
 	{
-		DuiSystem::LogEvent(LOG_LEVEL_ERROR, L"CDuiPanel::LoadXmlFile %s failed, not found div node", strFileName);
+		DuiSystem::LogEvent(LOG_LEVEL_ERROR, _T("CDuiPanel::LoadXmlFile %s failed, not found div node"), strFileName);
 		return FALSE;
 	}
 
 	// 加载div节点属性
 	if(!Load(pDivElem))
 	{
-		DuiSystem::LogEvent(LOG_LEVEL_ERROR, L"CDuiPanel::LoadXmlFile %s failed, load div node fail", strFileName);
+		DuiSystem::LogEvent(LOG_LEVEL_ERROR, _T("CDuiPanel::LoadXmlFile %s failed, load div node fail"), strFileName);
 		return FALSE;
 	}
 
@@ -160,7 +162,7 @@ HRESULT CDuiPanel::OnAttributeImageScrollV(const CString& strValue, BOOL bLoadin
 		}
 	}else	// 加载图片资源
 	{
-		UINT nResourceID = _wtoi(strSkin);
+		UINT nResourceID = _ttoi(strSkin);
 		if(!m_pControScrollV->SetBitmap(nResourceID, TEXT("PNG")))
 		{
 			if(!m_pControScrollV->SetBitmap(nResourceID, TEXT("BMP")))
@@ -202,7 +204,7 @@ HRESULT CDuiPanel::OnAttributeImageScrollH(const CString& strValue, BOOL bLoadin
 		}
 	}else	// 加载图片资源
 	{
-		UINT nResourceID = _wtoi(strSkin);
+		UINT nResourceID = _ttoi(strSkin);
 		if(!m_pControScrollH->SetBitmap(nResourceID, TEXT("PNG")))
 		{
 			if(!m_pControScrollH->SetBitmap(nResourceID, TEXT("BMP")))
@@ -245,7 +247,8 @@ HRESULT CDuiPanel::OnAttributePlugin(const CString& strValue, BOOL bLoading)
 	HINSTANCE hPluginHandle = NULL;
 	LPVOID pPluginObj = NULL;
 
-	if(DuiSystem::Instance()->LoadPluginFile(strValue, CEncodingUtil::AnsiToUnicode(IID_IDuiPluginPanel), hPluginHandle, pPluginObj))
+	//if(DuiSystem::Instance()->LoadPluginFile(strValue, CEncodingUtil::AnsiToUnicode(IID_IDuiPluginPanel), hPluginHandle, pPluginObj))
+	if(DuiSystem::Instance()->LoadPluginFile(strValue, IID_IDuiPluginPanel, hPluginHandle, pPluginObj))
 	{
 		m_strPluginFile = strValue;
 		m_hPluginHandle = hPluginHandle;
@@ -259,7 +262,8 @@ HRESULT CDuiPanel::OnAttributePlugin(const CString& strValue, BOOL bLoading)
 			nIDTemplate = pParentDlg->GetIDTemplate();
 			hWnd = pParentDlg->GetSafeHwnd();
 		}
-		m_pDuiPluginObject->OnInit(nIDTemplate, hWnd, CEncodingUtil::UnicodeToAnsi(GetName()), m_rc);
+		//m_pDuiPluginObject->OnInit(nIDTemplate, hWnd, CEncodingUtil::UnicodeToAnsi(GetName()), m_rc);
+		m_pDuiPluginObject->OnInit(nIDTemplate, hWnd, GetName(), m_rc, &m_xDuiPanel);
 	}
 
 	return bLoading?S_FALSE:S_OK;
@@ -386,23 +390,58 @@ void CDuiPanel::SetControlVisible(BOOL bIsVisible)
 		CControlBase * pControlBase = m_vecControl.at(i);
 		if (pControlBase)
 		{
-			if(pControlBase->IsClass(_T("div")) || pControlBase->IsClass(_T("tabctrl")))
+			if(pControlBase->IsClass(_T("div")) || pControlBase->IsClass(_T("tabctrl")) || pControlBase->IsClass(_T("layout")))
 			{
+				// 如果子控件是容器类型控件,则调用子控件的设置可见性函数
 				pControlBase->SetControlVisible(bIsVisible);
 			}else
 			{
-				// Panel可见性变化时候,只会隐藏原生控件,不主动显示原生控件
-				//if(!bIsVisible)
+				// 判断子控件当前是否可见,根据可见性设置子控件的原生控件的可见性
+				// 如果是edit控件,暂时不显示原生控件,否则tab页切换时候会有问题
+				BOOL bVisible = pControlBase->GetVisible();
+				if(pControlBase->IsClass(CDuiEdit::GetClassName()))
 				{
-					pControlBase->SetControlWndVisible(bIsVisible);
+					bVisible = FALSE;
 				}
+				pControlBase->SetControlWndVisible(bVisible);
 			}
 		}
 	}
 
+	// 如果有插件,则设置插件的可见性
 	if(m_pDuiPluginObject)
 	{
 		m_pDuiPluginObject->SetVisible(bIsVisible);
+	}
+}
+
+// 重载设置控件隐藏状态的函数，需要调用子控件的函数
+void CDuiPanel::SetControlHide(BOOL bIsHide)
+{
+	__super::SetControlHide(bIsHide);
+
+	// 设置每个子控件的原生Windows控件的可见性
+	for (size_t i = 0; i < m_vecControl.size(); i++)
+	{
+		CControlBase * pControlBase = m_vecControl.at(i);
+		if (pControlBase)
+		{
+			if(pControlBase->IsClass(_T("div")) || pControlBase->IsClass(_T("tabctrl")) || pControlBase->IsClass(_T("layout")))
+			{
+				// 如果子控件是容器类型控件,则调用子控件的设置隐藏函数
+				pControlBase->SetControlHide(bIsHide);
+			}else
+			{
+				// 判断子控件当前是否可见,根据可见性设置子控件的原生控件的可见性
+				pControlBase->SetControlWndVisible(pControlBase->GetVisible());
+			}
+		}
+	}
+
+	// 如果有插件,则设置插件的显示状态(插件接口暂不支持SetHide函数)
+	if(m_pDuiPluginObject)
+	{
+		m_pDuiPluginObject->SetVisible(!bIsHide);
 	}
 }
 
@@ -523,6 +562,17 @@ BOOL CDuiPanel::DrawSubControls(CDC &dc, CRect rcUpdate)
 	return TRUE;
 }
 
+// 设置控件刷新标识
+void CDuiPanel::SetUpdate(BOOL bUpdate, COLORREF clr/* = 0*/)
+{
+	__super::SetUpdate(bUpdate, clr);
+
+	if(m_pDuiPluginObject)
+	{
+		m_pDuiPluginObject->SetUpdate(bUpdate, clr);
+	}
+}
+
 // 鼠标坐标变换
 BOOL CDuiPanel::OnMousePointChange(CPoint& point)
 {
@@ -602,6 +652,36 @@ BOOL CDuiPanel::OnControlLButtonDblClk(UINT nFlags, CPoint point)
 	return FALSE;
 }
 
+// 鼠标右键按下事件处理
+BOOL CDuiPanel::OnControlRButtonDown(UINT nFlags, CPoint point)
+{
+	if(m_pDuiPluginObject)
+	{
+		return m_pDuiPluginObject->OnRButtonDown(nFlags, point);
+	}
+	return FALSE;
+}
+
+// 鼠标右键放开事件处理
+BOOL CDuiPanel::OnControlRButtonUp(UINT nFlags, CPoint point)
+{
+	if(m_pDuiPluginObject)
+	{
+		return m_pDuiPluginObject->OnRButtonUp(nFlags, point);
+	}
+	return FALSE;
+}
+
+// 鼠标右键双击事件处理
+BOOL CDuiPanel::OnControlRButtonDblClk(UINT nFlags, CPoint point)
+{
+	if(m_pDuiPluginObject)
+	{
+		return m_pDuiPluginObject->OnRButtonDblClk(nFlags, point);
+	}
+	return FALSE;
+}
+
 // 键盘事件处理
 BOOL CDuiPanel::OnControlKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 {
@@ -617,7 +697,7 @@ BOOL CDuiPanel::OnControlTimer()
 {
 	if(m_pDuiPluginObject)
 	{
-		return m_pDuiPluginObject->OnTimer(0, "");
+		return m_pDuiPluginObject->OnTimer(0, _T(""));
 	}
 	return __super::OnControlTimer();
 }
@@ -739,4 +819,172 @@ LRESULT CDuiPanel::OnMessage(UINT uID, UINT Msg, WPARAM wParam, LPARAM lParam)
 
 	// 如果事件未处理,则调用父类的消息函数,最终会送给各事件处理对象进行处理
 	return __super::OnMessage(uID, Msg, wParam, lParam);
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// 插件宿主窗口功能实现
+INTERFACE_IMPLEMENT(DuiPanel)
+
+// 获取应用程序名
+STDMETHODIMP_(CString)
+CDuiPanel::XDuiPanel::GetAppName()
+{
+	return DuiSystem::Instance()->GetString(_T("APP_NAME"));
+}
+
+// 获取平台路径
+STDMETHODIMP_(CString)
+CDuiPanel::XDuiPanel::GetPlatPath()
+{
+	return DuiSystem::GetExePath();
+}
+
+// 获取平台版本
+STDMETHODIMP_(CString)
+CDuiPanel::XDuiPanel::GetPlatVersion()
+{
+	return DuiSystem::Instance()->GetString(_T("APP_VER"));
+}
+
+// 获取当前语言
+STDMETHODIMP_(int)
+CDuiPanel::XDuiPanel::GetCurrentLanguage()
+{
+	return DuiSystem::Instance()->GetCurrentLanguage();
+}
+
+// 获取平台注册表根路径
+STDMETHODIMP_(CString)
+CDuiPanel::XDuiPanel::GetPlatRegistry()
+{
+	return DuiSystem::Instance()->GetConfig(_T("APP_REGISTRY"));
+}
+
+// 获取平台版权字符串
+STDMETHODIMP_(CString)
+CDuiPanel::XDuiPanel::GetPlatCopyRight()
+{
+	return DuiSystem::Instance()->GetString(_T("APP_COPYRIGHT"));
+}
+
+// 获取主页URL
+STDMETHODIMP_(CString)
+CDuiPanel::XDuiPanel::GetPlatHomeURL()
+{
+	return DuiSystem::Instance()->GetString(_T("APP_URL_HOME"));
+}
+
+// 获取下载URL
+STDMETHODIMP_(CString)
+CDuiPanel::XDuiPanel::GetPlatDownloadURL()
+{
+	return DuiSystem::Instance()->GetString(_T("APP_URL_DOWNLOAD"));
+}
+
+// 发送消息
+STDMETHODIMP_(int)
+CDuiPanel::XDuiPanel::SendMessage(CVciMessage* pIn, CVciMessage* ppOut)
+{
+	// 未实现
+	return 0;
+}
+
+// 平台的消息处理
+STDMETHODIMP_(int)
+CDuiPanel::XDuiPanel::ProcessMessage(CVciMessage* pIn, CVciMessage* ppOut)
+{
+	// 未实现
+	return 0;
+}
+
+// 发送平台命令
+STDMETHODIMP_(int)
+CDuiPanel::XDuiPanel::SendCommand(int nCmd, WPARAM wParam, LPARAM lParam)
+{
+	// 未实现
+	return 0;
+}
+
+// 发送平台命令
+STDMETHODIMP_(BOOL)
+CDuiPanel::XDuiPanel::SendCommand(int nCmd, WPARAM wParam, LPARAM lParam, LPVOID lpResult)
+{
+	return FALSE;
+}
+
+// 获取DuiVision应用ID
+STDMETHODIMP_(int)
+CDuiPanel::XDuiPanel::GetAppID()
+{
+	return DuiSystem::Instance()->GetAppID();
+}
+
+// 获取窗口背景信息
+STDMETHODIMP_(BOOL)
+CDuiPanel::XDuiPanel::GetWindowBkInfo(int& nType, int& nIDResource, COLORREF& clr, CString& strImgFile)
+{
+	return DuiSystem::Instance()->GetWindowBkInfo(nType, nIDResource, clr, strImgFile);
+}
+
+// 设置窗口背景信息
+STDMETHODIMP_(BOOL)
+CDuiPanel::XDuiPanel::SetWindowBkInfo(int nType, int nIDResource, COLORREF clr, LPCTSTR lpszImgFile)
+{
+	return DuiSystem::Instance()->SetWindowBkInfo(nType, nIDResource, clr, lpszImgFile);
+}
+
+// 坐标转换为屏幕坐标
+STDMETHODIMP_(void)
+CDuiPanel::XDuiPanel::ClientToScreen(LPPOINT lpPoint)
+{
+	CDuiPanel *pObj = GET_INTERFACE_OBJECT(DuiPanel);
+	pObj->ClientToScreen(lpPoint);
+}
+
+// 获取宿主窗口的句柄
+STDMETHODIMP_(HWND)
+CDuiPanel::XDuiPanel::GetPaintHWnd()
+{
+	CDuiPanel *pObj = GET_INTERFACE_OBJECT(DuiPanel);
+	return pObj->GetPaintHWnd();
+}
+
+// 设置Tooltip
+STDMETHODIMP_(void)
+CDuiPanel::XDuiPanel::SetTooltip(int nCtrlID, LPCTSTR lpszTooltip, CRect rect, int nTipWidth)
+{
+	CDuiPanel *pObj = GET_INTERFACE_OBJECT(DuiPanel);
+	pObj->SetTooltip(pObj, lpszTooltip, rect, FALSE, nTipWidth);
+}
+
+// 清除Tooltip
+STDMETHODIMP_(void)
+CDuiPanel::XDuiPanel::ClearTooltip()
+{
+	CDuiPanel *pObj = GET_INTERFACE_OBJECT(DuiPanel);
+	pObj->ClearTooltip();
+}
+
+// 设置当前Tooltip控件ID
+STDMETHODIMP_(void)
+CDuiPanel::XDuiPanel::SetTooltipCtrlID(int nTooltipCtrlID)
+{
+	CDuiPanel *pObj = GET_INTERFACE_OBJECT(DuiPanel);
+	if(pObj)
+	{
+		pObj->SetTooltipCtrlID(nTooltipCtrlID);
+	}
+}
+
+// 获取当前Tooltip控件ID
+STDMETHODIMP_(int)
+CDuiPanel::XDuiPanel::GetTooltipCtrlID()
+{
+	CDuiPanel *pObj = GET_INTERFACE_OBJECT(DuiPanel);
+	if(pObj)
+	{
+		return pObj->GetTooltipCtrlID();
+	}
+
+	return 0;
 }

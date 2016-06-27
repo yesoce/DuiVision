@@ -1070,7 +1070,7 @@ CDuiRichEdit::CDuiRichEdit(HWND hWnd, CDuiObject* pDuiObject)
 	m_bReadOnly = false;
 	m_bNumber = false;
 	m_bWordWrap = false;
-	m_strFile = L"";
+	m_strFile = _T("");
     m_iLimitText = cInitTextMax;
 	m_nStartChar = -1;
 	m_nEndChar = -1;
@@ -1220,7 +1220,7 @@ HRESULT CDuiRichEdit::OnAttributeLeftImage(const CString& strValue, BOOL bLoadin
 		}
 	}else	// 加载图片资源
 	{
-		UINT nResourceID = _wtoi(strSkin);
+		UINT nResourceID = _ttoi(strSkin);
 		if(!SetLeftBitmap(nResourceID, TEXT("PNG")))
 		{
 			if(!SetLeftBitmap(nResourceID, TEXT("BMP")))
@@ -1306,7 +1306,7 @@ HRESULT CDuiRichEdit::OnAttributeSmallImage(const CString& strValue, BOOL bLoadi
 		}
 	}else	// 加载图片资源
 	{
-		UINT nResourceID = _wtoi(strSkin);
+		UINT nResourceID = _ttoi(strSkin);
 		if(!SetSmallBitmap(nResourceID, TEXT("PNG")))
 		{
 			if(!SetSmallBitmap(nResourceID, TEXT("BMP")))
@@ -1508,7 +1508,7 @@ bool CDuiRichEdit::SetFile(LPCTSTR pstrFile)
     if( !m_pTxtWinHost ) return false;
 
 	SetSel(-1, -1);
-    ReplaceSel(L"", FALSE);
+    ReplaceSel(_T(""), FALSE);
 
 	BYTE* pData = NULL;
 	if(DuiSystem::Instance()->LoadFileToBuffer(pstrFile, pData))
@@ -1567,16 +1567,7 @@ int CDuiRichEdit::SetSel(long nStartChar, long nEndChar)
 
 void CDuiRichEdit::ReplaceSel(LPCTSTR lpszNewText, bool bCanUndo)
 {
-#ifdef _UNICODE		
     TxSendMessage(EM_REPLACESEL, (WPARAM) bCanUndo, (LPARAM)lpszNewText, 0); 
-#else
-    int iLen = _tcslen(lpszNewText);
-    LPWSTR lpText = new WCHAR[iLen + 1];
-    ::ZeroMemory(lpText, (iLen + 1) * sizeof(WCHAR));
-    ::MultiByteToWideChar(CP_ACP, 0, lpszNewText, -1, (LPWSTR)lpText, iLen) ;
-    TxSendMessage(EM_REPLACESEL, (WPARAM) bCanUndo, (LPARAM)lpText, 0); 
-    delete[] lpText;
-#endif
 }
 
 void CDuiRichEdit::ReplaceSelW(LPCWSTR lpszNewText, bool bCanUndo)
@@ -1586,7 +1577,7 @@ void CDuiRichEdit::ReplaceSelW(LPCWSTR lpszNewText, bool bCanUndo)
 
 CString CDuiRichEdit::GetSelText() const
 {
-    if( !m_pTxtWinHost ) return L"";
+    if( !m_pTxtWinHost ) return _T("");
     CHARRANGE cr;
     cr.cpMin = cr.cpMax = 0;
     TxSendMessage(EM_EXGETSEL, 0, (LPARAM)&cr, 0);
@@ -1995,7 +1986,7 @@ void CDuiRichEdit::DoInit()
 		// 加载rtf文件
 		if(!m_strFile.IsEmpty())
 		{
-			CString strFile = L"";
+			CString strFile = _T("");
 			if(GetFileAttributes(DuiSystem::GetSkinPath() + strFile) != 0xFFFFFFFF)	// 从exe路径开始查找
 			{
 				strFile = DuiSystem::GetSkinPath() + m_strFile;
@@ -2393,7 +2384,7 @@ BOOL CDuiRichEdit::OnControlLButtonDown(UINT nFlags, CPoint point)
 					{				
 						m_buttonState = enBSHover;
 					}				
-					SendMessage(m_uID, CONTROL_BUTTON, MSG_BUTTON_DOWN);
+					SendMessage(MSG_CONTROL_BUTTON, CONTROL_BUTTON, MSG_BUTTON_DOWN);
 				}
 			}
 			else
@@ -2404,7 +2395,7 @@ BOOL CDuiRichEdit::OnControlLButtonDown(UINT nFlags, CPoint point)
 					m_buttonState = enBSHover;
 				}
 				
-				SendMessage(m_uID, CONTROL_EDIT, MSG_BUTTON_DOWN);
+				SendMessage(MSG_CONTROL_BUTTON, CONTROL_EDIT, MSG_BUTTON_DOWN);
 			}		
 		}
 		else
@@ -2450,7 +2441,7 @@ BOOL CDuiRichEdit::OnControlLButtonUp(UINT nFlags, CPoint point)
 					{
 						m_buttonState = enBSHover;
 					}	
-					SendMessage(m_uID, CONTROL_BUTTON, MSG_BUTTON_UP);
+					SendMessage(MSG_CONTROL_BUTTON, CONTROL_BUTTON, MSG_BUTTON_UP);
 				}
 			}
 			else
@@ -2463,7 +2454,7 @@ BOOL CDuiRichEdit::OnControlLButtonUp(UINT nFlags, CPoint point)
 				{
 					m_buttonState = enBSNormal;
 				}	
-				SendMessage(m_uID, CONTROL_EDIT, MSG_BUTTON_UP);
+				SendMessage(MSG_CONTROL_BUTTON, CONTROL_EDIT, MSG_BUTTON_UP);
 			}			
 		}
 		else
@@ -2532,6 +2523,11 @@ BOOL CDuiRichEdit::OnControlKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 
 	return true;
 */
+	if(!IsFocusControl())
+	{
+		return false;
+	}
+
 	bool handled = true;
 	unsigned int virtualKeyCode = nChar;
     unsigned int flags = nFlags;
@@ -2540,8 +2536,8 @@ BOOL CDuiRichEdit::OnControlKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 		bShiftState = true;
 	HKL hKL = GetKeyboardLayout(0);
 	int i = LOWORD(hKL);
-	WCHAR buffer[255];   
-	memset(buffer,0,255 * sizeof(WCHAR));  
+	TCHAR buffer[255];   
+	memset(buffer,0,255 * sizeof(TCHAR));  
 	if( (i == 0x0804) && (ImmIsIME(hKL)) )
 	{
 		ImmGetDescription(hKL,buffer,255);
@@ -3095,7 +3091,7 @@ LRESULT CDuiRichEdit::MessageHandler(UINT uMsg, WPARAM wParam, LPARAM lParam, bo
 					// This is the first WM_CHAR message, 
 					// accumulate it if this is a LeadByte.  Otherwise, fall thru to
 					// regular WM_CHAR processing.
-					if ( IsDBCSLeadByte ( (WORD)wParam ) )
+					if ( IsDBCSLeadByte ( (BYTE)(WORD)wParam ) )
 					{
 						// save the Lead Byte and don't process this message
 						m_chLeadByte = (WORD)wParam << 8 ;

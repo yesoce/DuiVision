@@ -33,7 +33,7 @@ HRESULT CDuiAnimateImage::OnAttributeMaxIndex(const CString& strValue, BOOL bLoa
 {
 	if (strValue.IsEmpty() || (m_pImage == NULL)) return E_FAIL;
 
-	m_nMaxIndex = _wtoi(strValue);
+	m_nMaxIndex = _ttoi(strValue);
 	SetBitmapCount(m_nMaxIndex);
 
 	m_sizeImage.SetSize(m_pImage->GetWidth() / m_nImagePicCount, m_pImage->GetHeight());
@@ -47,7 +47,7 @@ HRESULT CDuiAnimateImage::OnAttributeRun(const CString& strValue, BOOL bLoading)
 {
 	if (strValue.IsEmpty()) return E_FAIL;
 
-	BOOL bRun = (strValue == _T("true"));
+	BOOL bRun = (strValue == _T("1") ? TRUE : FALSE);
 	SetRun(bRun);
 
 	return bLoading?S_FALSE:S_OK;

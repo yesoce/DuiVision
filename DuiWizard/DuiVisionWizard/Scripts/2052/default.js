@@ -108,6 +108,14 @@ function AddDuiVisionProject(strProjectName, strProjectPath)
 		{
 			strPrjNameDuiVision += 'DuiVision.2010.vcxproj';
 		}else
+		if(dte.Version == '12.0')
+		{
+			strPrjNameDuiVision += 'DuiVision.2013.vcxproj';
+		}else
+		if(dte.Version == '14.0')
+		{
+			strPrjNameDuiVision += 'DuiVision.2015.vcxproj';
+		}else
 		{
 			return;
 		}
@@ -167,6 +175,8 @@ function AddConfig(proj, strProjectName)
 			strProjExeExt = '.dll';
 		}
 		
+		var WizardVersion = wizard.FindSymbol('WIZARD_VERSION');
+		
         // Debug设置
 	    var config = proj.Object.Configurations('Debug');
 		if(strProjPlugin)
@@ -177,7 +187,13 @@ function AddConfig(proj, strProjectName)
 			config.ConfigurationType = 1; // 0=unk, 1=exe, 2=dll, 4=lib, 10=generic
 		}
 	    config.CharacterSet = charSetUNICODE;
-	    config.IntermediateDirectory = '$(ConfigurationName)';
+		if(WizardVersion >= 10.0)
+		{
+			config.IntermediateDirectory = '$(Configuration)\\';
+		}else
+		{
+			config.IntermediateDirectory = '$(ConfigurationName)\\';
+		}
 	    config.OutputDirectory = '$(SolutionDir)bin';
 		config.useOfMfc = 2; // 0=win32, 1=static, 2=dynamic
 		config.useOfAtl = 0; // 0=not set, 1=static, 2=dynamic
@@ -188,8 +204,10 @@ function AddConfig(proj, strProjectName)
 		CLTool.SuppressStartupBanner = true;
 		CLTool.WarningLevel = warningLevelOption.warningLevel_3;
 		CLTool.AdditionalIncludeDirectories = '..\\DuiVision\\include;..\\DuiVision\\common;';//%(AdditionalIncludeDirectories)';
+		CLTool.DebugInformationFormat = 3;	// 调试信息格式:0=none, 1=Z7, 2=Zi, 3=ZI
 		CLTool.PreprocessorDefinitions = 'WIN32;_WINDOWS;STRICT;_DEBUG;_CRT_SECURE_NO_WARNINGS;'; //%(PreprocessorDefinitions)';
-		CLTool.RuntimeLibrary = 3; // 0=MT, 1=MTd, 2=MTD (DLL), 3=MTDd
+		CLTool.RuntimeLibrary = 3; // 运行时库:0=MT, 1=MTd, 2=MTD (DLL), 3=MTDd
+		CLTool.Optimization = 0; // 优化:0=disabled, 1=minspace, 2=maxspe
 
 		var LinkTool = config.Tools('VCLinkerTool');
 		// TODO: 添加链接器设置
@@ -201,11 +219,25 @@ function AddConfig(proj, strProjectName)
 		// 附加依赖项
 		if(dte.Version == '9.0')
 		{
-			LinkTool.AdditionalDependencies = "DuiVision.2008d.lib wke.lib";	// VC2008库
+			LinkTool.AdditionalDependencies = "DuiVision.2008d.lib";	// VC2008库
 		}else
 		if(dte.Version == '10.0')
 		{
-			LinkTool.AdditionalDependencies = "DuiVision.2010d.lib wke.lib";	// VC2010库
+			LinkTool.AdditionalDependencies = "DuiVision.2010d.lib";	// VC2010库
+		}else
+		if(dte.Version == '12.0')
+		{
+			LinkTool.AdditionalDependencies = "DuiVision.2013d.lib";	// VC2013库
+		}else
+		if(dte.Version == '14.0')
+		{
+			LinkTool.AdditionalDependencies = "DuiVision.2015d.lib";	// VC2015库
+		}
+		
+		// 如果工程选项选择了支持WKE控件,则增加相应的配置
+		if(wizard.FindSymbol('OPTION_CHECK_USEWKE'))
+		{
+			LinkTool.AdditionalDependencies += " wke.lib";
 		}
 
 		// Release设置
@@ -218,7 +250,13 @@ function AddConfig(proj, strProjectName)
 			config.ConfigurationType = 1; // 0=unk, 1=exe, 2=dll, 4=lib, 10=generic
 		}
 		config.CharacterSet = charSetUNICODE;
-		config.IntermediateDirectory = '$(ConfigurationName)';
+		if(WizardVersion >= 10.0)
+		{
+			config.IntermediateDirectory = '$(Configuration)\\';
+		}else
+		{
+			config.IntermediateDirectory = '$(ConfigurationName)\\';
+		}
 		config.OutputDirectory = '$(SolutionDir)bin';
 		config.useOfMfc = 2; // 0=win32, 1=static, 2=dynamic
 		config.useOfAtl = 0; // 0=not set, 1=static, 2=dynamic
@@ -242,11 +280,25 @@ function AddConfig(proj, strProjectName)
 		// 附加依赖项
 		if(dte.Version == '9.0')
 		{
-			LinkTool.AdditionalDependencies = "DuiVision.2008.lib wke.lib";	// VC2008库
+			LinkTool.AdditionalDependencies = "DuiVision.2008.lib";	// VC2008库
 		}else
 		if(dte.Version == '10.0')
 		{
-			LinkTool.AdditionalDependencies = "DuiVision.2010.lib wke.lib";	// VC2010库
+			LinkTool.AdditionalDependencies = "DuiVision.2010.lib";	// VC2010库
+		}else
+		if(dte.Version == '12.0')
+		{
+			LinkTool.AdditionalDependencies = "DuiVision.2013.lib";	// VC2013库
+		}else
+		if(dte.Version == '14.0')
+		{
+			LinkTool.AdditionalDependencies = "DuiVision.2015.lib";	// VC2015库
+		}
+		
+		// 如果工程选项选择了支持WKE控件,则增加相应的配置
+		if(wizard.FindSymbol('OPTION_CHECK_USEWKE'))
+		{
+			LinkTool.AdditionalDependencies += " wke.lib";
 		}
 	}
 	catch(e)
